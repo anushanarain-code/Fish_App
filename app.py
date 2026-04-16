@@ -4,300 +4,521 @@ import numpy as np
 
 st.set_page_config(layout="wide")
 
-# -----------------------------
-# HEADER
-# -----------------------------
-st.title("🐟 Fish Welfare Decision System")
-st.caption("Inspection + Welfare Intelligence + Policy Output")
+# =============================
+# EVIDENCE LAYER
+# =============================
 
-st.info("""
-This tool is a **decision-support system** for evaluating fish welfare risk.
-
-It combines:
-- Biological factors (sentience)
-- Farming system characteristics
-- Environmental context
-- Image-based observational signals
-
-To generate:
-→ A **transparent welfare risk score**
-→ **Driver-level explanations**
-→ **Targeted intervention recommendations**
-
-This is an early-stage semi-empirical model designed for inspection, policy, and strategy use.
-""")
-
-with st.expander("ℹ️ How the system works"):
-    st.write("""
-Risk = Severity × System Factors × Sentience × Scenario Fit
-
-- Severity = weighted welfare risks (density, water, slaughter, disease)
-- System Factors = production intensity and maturity
-- Sentience = species-specific capacity for suffering
-- Scenario Fit = realism of species-geography combination
-
-Drivers are derived from:
-- Context inputs
-- System configuration
-- Image-based signals (if uploaded)
-
-Output is a relative welfare risk score (0–10)
-""")
-
-# -----------------------------
-# INPUTS
-# -----------------------------
-st.subheader("📍 Context")
-
-species = st.selectbox("Species", ["Carp","Tilapia","Salmon","Shrimp"],
-    help="Determines biological sensitivity and sentience")
-
-geo = st.selectbox("Geography", ["India","Nigeria","Vietnam","Bangladesh","EU"],
-    help="Affects baseline environmental risks")
-
-system_type = st.selectbox("Production System", ["Extensive","Semi-Intensive","Intensive"],
-    help="Higher intensity increases density and stress")
-
-slaughter_method = st.selectbox("Slaughter Method",
-    ["Asphyxiation (Air)", "Ice Slurry", "Electrical Stunning"],
-    help="Major determinant of suffering")
-
-target_actor = st.selectbox(
-    "Target Actor",
-    ["NGO","Policymaker","Corporate","Finance","Animal Welfare","Environment"]
-)
-
-stage = st.selectbox("System Stage", ["Emerging","Growing","Mature"])
-dev_finance = st.selectbox("Development Finance", ["Low","Medium","High"])
-confidence = st.selectbox("Sentience Confidence", ["Low","Medium","High"])
-
-# -----------------------------
-# SCENARIO
-# -----------------------------
-st.subheader("🌍 Scenario Check")
-
-mismatch_penalty = 0
-
-if species == "Salmon" and geo in ["India","Bangladesh"]:
-    st.warning("⚠ Mismatch: Salmon rare here")
-    mismatch_penalty = 0.3
-else:
-    st.success("✔ Scenario realistic")
-
-# -----------------------------
-# SENTIENCE
-# -----------------------------
-sentience_map = {"Carp":0.5,"Tilapia":0.6,"Salmon":0.85,"Shrimp":0.3}
-conf_map = {"Low":0.5,"Medium":0.75,"High":1}
-
-sentience = sentience_map[species] * conf_map[confidence]
-
-st.subheader("🧠 Sentience")
-st.write(f"Effective sentience: {round(sentience,2)}")
-
-# -----------------------------
-# SCORES
-# -----------------------------
-explanations = {}
-
-disease_base = 2 if system_type == "Extensive" else 3 if system_type == "Semi-Intensive" else 4
-
-scores = {
-    "Stocking Density": {
-        "value": 2 if system_type=="Extensive" else 3 if system_type=="Semi-Intensive" else 4,
-        "weight": 0.25,
-        "confidence": 0.7
-    },
+EVIDENCE_DB = {
     "Water Quality": {
-        "value": 3 if geo=="India" else 2,
-        "weight": 0.3,
-        "confidence": 0.8
+        "description": "Water conditions affect oxygen levels, ammonia toxicity, and physiological stress.",
+        "why": "Poor water quality is a primary cause of chronic stress and mortality.",
+        "intervention": "Improve filtration, aeration, and water exchange systems.",
+        "sources": ["FAO Aquaculture Guidelines", "Boyd (2015)"]
+    },
+    "Stocking Density": {
+        "description": "Crowding increases stress and injury.",
+        "why": "High density reduces oxygen and increases aggression and disease.",
+        "intervention": "Reduce stocking density.",
+        "sources": ["FAO Reports", "Ashley (2007)"]
     },
     "Slaughter": {
-        "value": 5 if slaughter_method=="Asphyxiation (Air)" else 3,
-        "weight": 0.3,
-        "confidence": 1
+        "description": "Determines intensity of death-related suffering.",
+        "why": "Asphyxiation causes prolonged distress.",
+        "intervention": "Use electrical stunning.",
+        "sources": ["EFSA (2009)", "Humane Slaughter Association"]
     },
     "Disease": {
-        "value": disease_base,
-        "weight": 0.15,
-        "confidence": 0.6
+        "description": "Represents infection pressure.",
+        "why": "Poor hygiene increases pathogen load.",
+        "intervention": "Improve hygiene and biosecurity.",
+        "sources": ["FAO Fish Health", "WOAH"]
     }
 }
 
-explanations["Stocking Density"] = f"Derived from system type: {system_type}"
-explanations["Water Quality"] = f"Baseline from geography: {geo}"
-explanations["Slaughter"] = f"Derived from method: {slaughter_method}"
-explanations["Disease"] = f"Derived from system intensity: {system_type}"
+# =============================
+# BASELINE
+# =============================
 
-# -----------------------------
-# IMAGE INPUT
-# -----------------------------
-st.subheader("📸 Image (Optional)")
+BASELINE = {
+    "geography": {"India": {"Water Quality": +1}},
+    "system_type": {"Intensive": {"Stocking Density": +1, "Disease": +1}},
+    "species": {"Shrimp": {"Disease": +1}}
+}
 
-img_file = st.file_uploader("Upload", type=["jpg","png"])
-image_effects = []
+def apply_baseline(scores, geo, system_type, species):
+    for layer, key in [("geography", geo), ("system_type", system_type), ("species", species)]:
+        if key in BASELINE[layer]:
+            for driver, adj in BASELINE[layer][key].items():
+                scores[driver]["value"] = min(5, max(1, scores[driver]["value"] + adj))
+    return scores
 
-if img_file:
-    img = Image.open(img_file)
-    st.image(img, width=200)
+# =============================
+# POLICY INTELLIGENCE
+# =============================
 
-    stat = ImageStat.Stat(img)
-    brightness = np.mean(stat.mean)
-    contrast = np.std(stat.mean)
+POLICY_DB = {
+    "NGO": {
+        "Slaughter": {
+            "title": "End-of-life welfare failure",
+            "problem": ["Prolonged distress", "Preventable harm"],
+            "actions": ["Advocate stunning", "Target processors", "Public campaigns"]
+        },
+        "Water Quality": {
+            "title": "Water quality constraint",
+            "problem": ["Chronic stress"],
+            "actions": ["Farmer training", "Push regulation"]
+        }
+    }
+}
 
-    img_array = np.array(img)
-    variation = np.std(img_array)
-    avg_color = np.mean(img_array, axis=(0,1))
+def render_policy_intelligence(target_actor, scores, top_driver):
+    st.subheader("🏛️ Policy Intelligence")
+    actor_policies = POLICY_DB.get(target_actor, {})
 
-    st.caption(f"Brightness: {round(brightness,1)} | Contrast: {round(contrast,1)} | Variation: {round(variation,1)}")
+    if top_driver in actor_policies:
+        policy = actor_policies[top_driver]
+        st.write(f"**{policy['title']}**")
+        for p in policy["problem"]:
+            st.write(f"- {p}")
+        for a in policy["actions"]:
+            st.write(f"→ {a}")
 
-    if brightness < 40:
-        scores["Water Quality"]["value"] += 1
-        explanations["Water Quality"] += " + turbidity signal"
-        image_effects.append("Water Quality ↑")
+# =============================
+# ACTOR STRATEGY (NEW)
+# =============================
 
-    if contrast < 20:
-        scores["Disease"]["value"] += 1
-        explanations["Disease"] += " + stress/disease signal"
-        image_effects.append("Disease ↑")
+def render_actor_strategy(target_actor, top_driver, final_risk):
+    st.subheader("🧭 Why this matters")
 
-    if variation < 50:
-        scores["Stocking Density"]["value"] += 1
-        explanations["Stocking Density"] += " + crowding signal"
-        image_effects.append("Density ↑")
+    if target_actor == "NGO":
+        st.write(f"""
+- High-leverage intervention targeting **{top_driver}**
+- Severe but preventable harm
+→ Strong campaign potential
+""")
 
-    st.subheader("🧠 Image Insight (Experimental)")
+# =============================
+# CORE LOGIC
+# =============================
 
-    if avg_color[0] > avg_color[2]:
-        st.info("Likely environment: sediment-heavy / inland system (carp/tilapia typical)")
-    elif avg_color[2] > avg_color[0]:
-        st.info("Likely environment: clearer/open water (possible marine or controlled system)")
+def compute_sentience(species, confidence):
+    return {"Carp":0.5,"Tilapia":0.6,"Salmon":0.85,"Shrimp":0.3}[species] * {"Low":0.5,"Medium":0.75,"High":1}[confidence]
 
-    st.warning("Image-based signals are low-confidence and should be validated with field data")
+def build_scores(density, water, slaughter, disease):
+    return {
+        "Stocking Density":{"value":density,"weight":0.25,"confidence":0.7},
+        "Water Quality":{"value":water,"weight":0.3,"confidence":0.8},
+        "Slaughter":{"value":slaughter,"weight":0.3,"confidence":1},
+        "Disease":{"value":disease,"weight":0.15,"confidence":0.6}
+    }
 
-# -----------------------------
-# RISK
-# -----------------------------
-weighted_sum = sum(v["value"] * v["weight"] * v["confidence"] for v in scores.values())
+def compute_risk(scores, system_type, stage, sentience):
+    weighted = sum(v["value"] * v["weight"] * v["confidence"] for v in scores.values())
+    scale = {"Extensive":1,"Semi-Intensive":1.3,"Intensive":1.6}[system_type]
+    stage_factor = {"Emerging":0.8,"Growing":1,"Mature":1.3}[stage]
+    risk = weighted * scale * stage_factor * (1 + 1.5 * sentience)
 
-scale = {"Extensive":1,"Semi-Intensive":1.3,"Intensive":1.6}[system_type]
-persistence = {"Emerging":0.8,"Growing":1,"Mature":1.3}[stage]
+    if scores["Slaughter"]["value"] >= 5:
+        risk = max(risk, weighted * 0.8 + 2)
 
-if dev_finance == "High":
-    scale += 0.3
+    return round(min(10, risk),2), weighted, scale, stage_factor
 
-risk = weighted_sum * scale * persistence * (1 + sentience)
-risk *= (1 + mismatch_penalty)
+def compute_confidence(scores, mismatch_flag):
 
-if scores["Slaughter"]["value"] >= 5:
-    risk = max(risk, 5)
+    confidence_score = np.mean([v["confidence"] for v in scores.values()])
 
-risk = round(min(10, risk),2)
+    # Reduce confidence if scenario mismatch
+    if mismatch_flag:
+        confidence_score *= 0.8
 
-# -----------------------------
-# OUTPUT
-# -----------------------------
-st.subheader("📊 Welfare Intelligence")
+    confidence_score = round(confidence_score, 2)
 
-st.metric("Risk Score", risk)
-st.progress(risk/10)
+    if confidence_score > 0.75:
+        label = "High"
+    elif confidence_score > 0.5:
+        label = "Moderate"
+    else:
+        label = "Low"
 
-# -----------------------------
-# CONTRIBUTION
-# -----------------------------
-st.subheader("📊 Contribution to Risk")
+    return confidence_score, label
 
-for k, v in scores.items():
-    contrib = v["value"] * v["weight"]
-    st.write(f"{k}: {round(contrib,2)}")
+# =============================
+# SIMULATION LAYER
+# =============================
 
-# -----------------------------
-# CONFIDENCE
-# -----------------------------
-avg_conf = np.mean([v["confidence"] for v in scores.values()])
-st.subheader("⚖️ Confidence in Assessment")
-st.write(f"Overall confidence: {round(avg_conf,2)}")
+def simulate_intervention(scores, system_type, stage, sentience):
 
-# -----------------------------
-# IMAGE IMPACT
-# -----------------------------
-if img_file:
-    st.subheader("🧾 Image Impact")
-    st.write("Drivers affected by image:")
-    for e in image_effects:
-        st.write(f"- {e}")
+    sim_scores = {k: v.copy() for k, v in scores.items()}
 
-# -----------------------------
+    reduce_density = st.checkbox("Reduce stocking density")
+    improve_water = st.checkbox("Improve water quality")
+    stun_slaughter = st.checkbox("Use electrical stunning")
+
+    if reduce_density:
+        sim_scores["Stocking Density"]["value"] = max(1, sim_scores["Stocking Density"]["value"] - 1)
+
+    if improve_water:
+        sim_scores["Water Quality"]["value"] = max(1, sim_scores["Water Quality"]["value"] - 1)
+
+    if stun_slaughter:
+        sim_scores["Slaughter"]["value"] = 2
+
+    new_risk, _, _, _ = compute_risk(sim_scores, system_type, stage, sentience)
+
+    return new_risk, reduce_density, improve_water, stun_slaughter
+
+# =============================
+# ADVOCACY LAYER
+# =============================
+
+def render_advocacy(target_actor, top_driver, final_risk):
+
+    st.subheader("📢 Advocacy Framing")
+
+    if final_risk >= 6:
+        risk_level = "High"
+    elif final_risk >= 3:
+        risk_level = "Moderate"
+    else:
+        risk_level = "Low"
+
+    st.write(f"{risk_level} risk driven by **{top_driver}**.")
+
+    if target_actor == "NGO":
+        st.write("""
+→ Focus on preventable suffering  
+→ Highlight scale and invisibility of fish suffering  
+→ Use clear villains (e.g. slaughter practices)  
+→ Combine campaigns with corporate pressure  
+""")
+
+    elif target_actor == "Corporate":
+        st.write("""
+→ Frame as operational + reputational risk  
+→ Link welfare to efficiency and product quality  
+→ Emphasize future regulation and buyer expectations  
+""")
+
+    elif target_actor == "Finance":
+        st.write("""
+→ Frame as ESG and regulatory exposure  
+→ Highlight risk shocks  
+→ Position welfare as long-term risk  
+""")
+
+    elif target_actor == "Policymaker":
+        st.write("""
+→ Frame as regulatory gap  
+→ Link welfare to environment and public interest  
+→ Emphasize system-wide impact  
+""")
+
+# =============================
+# IMAGE INPUT LAYER
+# =============================
+
+def process_image(img_file, scores):
+
+    image_flag = False
+
+    if img_file is not None:
+        img = Image.open(img_file)
+        st.image(img, width=250)
+
+        stat = ImageStat.Stat(img)
+        brightness = np.mean(stat.mean)
+        contrast = np.std(stat.mean)
+
+        # Simple heuristics (transparent, not black-box)
+        if brightness < 40:
+            scores["Water Quality"]["value"] = min(5, scores["Water Quality"]["value"] + 1)
+
+        if contrast < 20:
+            scores["Disease"]["value"] = min(5, scores["Disease"]["value"] + 1)
+
+        # Low-quality image reduces confidence
+        if brightness < 30 or contrast < 10:
+            image_flag = True
+            st.warning("⚠️ Low-quality image — results less reliable")
+
+    return scores, image_flag
+
+# =============================
+# UI
+# =============================
+
+st.title("🐟 Fish Welfare Decision System")
+
+st.markdown("### 📚 How this tool works")
+
+# =============================
+# DATA & METHOD
+# =============================
+
+with st.expander("📊 Data & Method (What this tool is based on)"):
+    st.write("""
+This tool combines three types of inputs:
+
+**1. Scientific Evidence Base**
+- FAO aquaculture guidelines
+- EFSA fish welfare reports
+- WOAH animal health standards
+- Academic welfare literature
+
+**2. Structured Welfare Model**
+- Four core drivers: Density, Water, Slaughter, Disease
+- Each scored (1–5), weighted, and combined
+- Adjusted for system type and geography
+
+**3. Empirical Inputs (User + Context)**
+- User-provided scores
+- Optional farm images (visual indicators of water quality and disease risk)
+- Scenario validation (species × geography)
+
+This is a **decision-support model**, not a predictive AI system.
+It is designed for:
+→ Transparency  
+→ Explainability  
+→ Policy and advocacy use
+""")
+
+with st.expander("Click to understand the model"):
+    st.write("""
+This tool estimates **fish welfare risk** using four key drivers:
+
+- Stocking Density  
+- Water Quality  
+- Slaughter Practices  
+- Disease Risk  
+
+Each driver is:
+- Scored (1–5)
+- Weighted based on welfare importance
+- Adjusted for system type and geography
+
+The model also includes:
+- A **sentience multiplier** (higher sentience = higher moral weight)
+- A **system scale factor** (intensive systems increase risk)
+- A **stage factor** (mature systems amplify impact)
+
+The goal is to:
+→ Identify the **highest-impact welfare problem**  
+→ Recommend **targeted interventions**
+""")
+
+st.subheader("📍 Context")
+
+species = st.selectbox(
+    "Species",
+    ["Carp","Tilapia","Salmon","Shrimp"],
+    help="Species determines baseline sentience and biological sensitivity."
+)
+
+geo = st.selectbox(
+    "Geography",
+    ["India","Nigeria","Vietnam","Bangladesh","EU"],
+    help="Geography affects baseline risks like water quality and regulatory conditions."
+)
+
+system_type = st.selectbox(
+    "Production System",
+    ["Extensive","Semi-Intensive","Intensive"],
+    help="More intensive systems typically increase density, disease risk, and stress."
+)
+
+target_actor = st.selectbox(
+    "Target Actor",
+    ["NGO","Corporate","Finance","Policymaker"],
+    help="Determines the type of intervention strategy generated."
+)
+
+stage = st.selectbox(
+    "System Stage",
+    ["Emerging","Growing","Mature"],
+    help="Mature systems have larger scale and higher cumulative welfare impact."
+)
+
+confidence = st.selectbox(
+    "Sentience Confidence",
+    ["Low","Medium","High"],
+    help="Reflects scientific certainty about the species' capacity to feel pain. Lower confidence = more uncertainty in sentience estimates."
+)
+
+# =============================
+# SCENARIO CHECK
+# =============================
+
+mismatch_flag = False
+if species == "Salmon" and geo in ["India","Bangladesh","Nigeria"]:
+    st.warning("⚠️ Scenario mismatch: Salmon farming uncommon in this geography")
+    mismatch_flag = True
+
+sentience = compute_sentience(species, confidence)
+
+st.subheader("🧠 Sentience")
+
+st.write(f"Effective sentience: {round(sentience,2)}")
+
+with st.expander("What does this mean?"):
+    st.write("""
+Sentience reflects an animal's capacity to feel pain and suffering.
+
+Approximate comparison:
+- Shrimp: ~0.3  
+- Carp: ~0.5  
+- Tilapia: ~0.6  
+- Salmon: ~0.85  
+- Mammals (e.g. pigs): ~0.9+
+
+This tool adjusts welfare risk based on sentience:
+→ Higher sentience = higher moral weight of suffering
+
+Sentience confidence reflects how certain science is about these estimates:
+- Low → limited or debated evidence  
+- Medium → growing but incomplete evidence  
+- High → strong scientific consensus  
+""")
+
 # DRIVERS
-# -----------------------------
-st.subheader("🔍 Risk Drivers")
+st.subheader("🔧 Welfare Drivers")
+
+st.caption("Low (more space) ← → High (crowding)")
+density = st.slider(
+    "Stocking Density", 1, 5, 2,
+    help=EVIDENCE_DB["Stocking Density"]["description"]
+)
+st.caption("Good quality ← → Poor quality")
+water = st.slider(
+    "Water Quality", 1, 5, 3,
+    help=EVIDENCE_DB["Water Quality"]["description"]
+)
+st.caption("Humane (stunned) ← → Severe (asphyxiation)")
+slaughter = st.slider(
+    "Slaughter Severity", 1, 5, 5,
+    help=EVIDENCE_DB["Slaughter"]["description"]
+)
+st.caption("Low infection risk ← → High infection risk")
+disease = st.slider(
+    "Disease Risk", 1, 5, 2,
+    help=EVIDENCE_DB["Disease"]["description"]
+)
+
+scores = apply_baseline(build_scores(density, water, slaughter, disease), geo, system_type, species)
+
+# =============================
+# IMAGE INPUT
+# =============================
+
+st.subheader("📷 Evidence Input (Optional)")
+
+st.info("""
+Upload 2–5 images of the farm for better assessment.
+
+Guidelines:
+- Show water surface clearly
+- Capture fish density (crowding)
+- Ensure good lighting (avoid dark/blurred images)
+- Include feeding or active zones if possible
+
+Images are used as supporting evidence and improve confidence in future versions.
+""")
+img_file = st.file_uploader("Upload farm image", type=["jpg","png","jpeg"])
+
+scores, image_flag = process_image(img_file, scores)
+
+# RISK
+final_risk, weighted, scale, stage_factor = compute_risk(scores, system_type, stage, sentience)
+
+st.subheader("📊 Welfare Risk")
+st.metric("Welfare Risk Score", final_risk)
+
+# =============================
+# DRIVER CONTRIBUTION
+# =============================
+
+st.subheader("📊 Driver Contribution (%)")
+
+total = sum(v["value"] * v["weight"] for v in scores.values())
 
 for k, v in scores.items():
-    st.write(f"**{k}** → {v['value']}")
-    st.caption(explanations[k])
+    contrib = (v["value"] * v["weight"]) / total if total else 0
+    st.write(f"{k}: {round(contrib * 100, 1)}%")
+# DRIVER EXPLAINER
+st.subheader("📚 Driver Evidence")
+for k,v in scores.items():
+    st.write(f"**{k} (Score: {v['value']})**")
+    ev = EVIDENCE_DB[k]
+    st.write(f"What: {ev['description']}")
+    st.write(f"Why: {ev['why']}")
+    st.write(f"Intervention: {ev['intervention']}")
+    for src in ev["sources"]:
+        st.caption(f"- {src}")
 
-# -----------------------------
-# SIMULATOR
-# -----------------------------
-st.subheader("🔁 Intervention Simulator")
+# TOP DRIVER
+top_driver = max(scores, key=lambda k: scores[k]["value"])
 
-improve_slaughter = st.checkbox("Apply humane slaughter")
-reduce_density = st.checkbox("Reduce stocking density")
+# POLICY + STRATEGY
+render_policy_intelligence(target_actor, scores, top_driver)
+render_actor_strategy(target_actor, top_driver, final_risk)
+render_advocacy(target_actor, top_driver, final_risk)
 
-sim_scores = {k: v.copy() for k, v in scores.items()}
+# =============================
+# INTERVENTION SIMULATOR
+# =============================
 
-if improve_slaughter:
-    sim_scores["Slaughter"]["value"] = 2
+st.subheader("🔁 Intervention Simulation")
+st.caption("Select an intervention to see how welfare risk changes")
+
+new_risk, reduce_density, improve_water, stun_slaughter = simulate_intervention(
+    scores, system_type, stage, sentience
+)
+
+st.write(f"New Welfare Risk: {new_risk}")
+
+if final_risk > 0:
+    impact = round((final_risk - new_risk) / final_risk * 100, 1)
+    st.write(f"Impact: {impact}% reduction")
+
+if stun_slaughter and scores["Slaughter"]["value"] >= 4:
+    st.caption("Major impact driven by improving slaughter practices")
+
+if improve_water:
+    st.caption("Moderate impact from improving water conditions")
 
 if reduce_density:
-    sim_scores["Stocking Density"]["value"] = max(1, sim_scores["Stocking Density"]["value"] - 1)
+    st.caption("Incremental improvement from reducing density")
 
-new_weighted = sum(v["value"] * v["weight"] * v["confidence"] for v in sim_scores.values())
-new_risk = new_weighted * scale * persistence * (1 + sentience)
-new_risk = round(min(10, new_risk),2)
+# TRANSPARENCY
+st.subheader("🔬 Calculation")
+st.write(f"Weighted score: {round(weighted,2)} | Scale: {scale} | Stage: {stage_factor}")
 
-st.write(f"New Risk Score: {new_risk}")
+# CONFIDENCE
+confidence_score, label = compute_confidence(
+    scores,
+    mismatch_flag or ('image_flag' in locals() and image_flag)
+)
+st.subheader("📉 Confidence")
 
-impact = (risk - new_risk) / risk if risk > 0 else 0
-st.write(f"Impact: {round(impact*100,1)}% risk reduction")
+st.caption("""
+What affects confidence?
+- Quality of input data (slider assumptions)
+- Availability of evidence
+- Scenario realism (species × geography)
+- Presence of supporting images
+""")
 
-# -----------------------------
-# DECISION
-# -----------------------------
-st.subheader("🧠 Decision Recommendation")
+st.write(f"Confidence: **{confidence_score} ({label})**")
 
-if risk > 7:
-    st.write("Immediate intervention required")
-elif risk > 4:
-    st.write("Targeted improvements recommended")
-else:
-    st.write("Monitor system, no urgent intervention")
+if mismatch_flag:
+    st.caption("⚠ Reduced confidence due to scenario mismatch")
 
-# -----------------------------
-# REPORT
-# -----------------------------
-st.subheader("📄 Welfare Report Summary")
+with st.expander("What affects confidence?"):
+    st.write("""
+Confidence depends on:
+- Data quality of each welfare driver
+- Strength of scientific evidence
+- Scenario realism (species × geography)
 
-top = sorted(scores.items(), key=lambda x: x[1]["value"], reverse=True)
-
-st.write(f"**Risk Score:** {risk}")
-st.write(f"**Priority Intervention Area:** {top[0][0]}")
-
-# -----------------------------
-# POLICY
-# -----------------------------
-st.subheader("🏛️ Policy Output")
-
-if target_actor == "NGO":
-    if scores["Slaughter"]["value"] > 4:
-        st.write("• Campaign against inhumane slaughter")
-
-    if scores["Disease"]["value"] > 3:
-        st.write("• Highlight suffering in intensive systems")
-
-    if scores["Stocking Density"]["value"] > 3:
-        st.write("• Advocate density reforms")
-
-    st.write("• Build public pressure")
-    st.write("• Engage retailers")
+Lower confidence does NOT mean low risk  
+→ It means more uncertainty in the estimate
+""")
