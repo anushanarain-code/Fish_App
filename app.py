@@ -115,17 +115,7 @@ def apply_baseline(scores, geo, system_type, species):
     geo_data = BASELINE_DATA["geography"].get(geo, {})
     sys_data = BASELINE_DATA["system_type"].get(system_type, {})
 
-    # Water Quality baseline from geography
-    if "water_quality_base" in geo_data:
-        scores["Water Quality"]["value"] = geo_data["water_quality_base"]
-
-    # Disease baseline from geography
-    if "disease_pressure" in geo_data:
-        scores["Disease"]["value"] = geo_data["disease_pressure"]
-
-    # Stocking density baseline from system
-    if "stocking_density_base" in sys_data:
-        scores["Stocking Density"]["value"] = sys_data["stocking_density_base"]
+    # Only apply adjustments, NOT overwrite user-adjusted values
 
     # Water adjustment from system type
     if "water_adjust" in sys_data:
@@ -157,8 +147,7 @@ POLICY_DB = {
 
 def render_policy_intelligence(target_actor, scores, top_driver, geo, system_type):
 
-    st.subheader("🏛️ Policy Intelligence")
-
+    
     if target_actor == "NGO":
         st.caption("Focus: advocacy and system pressure")
     elif target_actor == "Policymaker":
@@ -246,6 +235,14 @@ def render_actor_strategy(target_actor, top_driver, final_risk):
 # CORE LOGIC
 # =============================
 
+def get_top_driver(scores):
+    ranked = sorted(
+        scores.items(),
+        key=lambda x: x[1]["value"] * x[1]["weight"] * x[1]["confidence"],
+        reverse=True
+    )
+    return ranked[0][0], ranked
+
 # =============================
 # SCENARIO MISMATCH ENGINE (V3)
 # =============================
@@ -296,6 +293,58 @@ def compute_risk(scores, system_type, stage, sentience):
 
     return round(min(10, risk),2), weighted, scale, stage_factor
 
+def apply_interactions(scores):
+    """
+    Adjust scores based on interaction effects between drivers
+    """
+
+    # Copy to avoid mutating original directly
+    adjusted = {k: v.copy() for k, v in scores.items()}
+
+    density = adjusted["Stocking Density"]["value"]
+    water = adjusted["Water Quality"]["value"]
+    disease = adjusted["Disease"]["value"]
+
+    # 1. Density × Disease interaction
+    if density >= 4 and disease >= 4:
+        adjusted["Disease"]["value"] = min(5, disease + 0.5)
+
+    # 2. Water × All (system stress multiplier)
+    if water >= 4:
+        for k in ["Stocking Density", "Disease"]:
+            adjusted[k]["value"] = min(5, adjusted[k]["value"] + 0.3)
+
+    # 3. Extreme suffering override (Slaughter dominates)
+    if adjusted["Slaughter"]["value"] == 5:
+        for k in adjusted:
+            adjusted[k]["confidence"] *= 1.1
+
+    return adjusted
+
+def compute_driver_impact(scores, system_type, stage, sentience):
+    """
+    Computes true contribution of each driver to final risk
+    (aligned with full model, not just raw weights)
+    """
+
+    scale = {"Extensive":1,"Semi-Intensive":1.3,"Intensive":1.6}[system_type]
+    stage_factor = {"Emerging":0.8,"Growing":1,"Mature":1.3}[stage]
+    sentience_factor = (1 + 1.5 * sentience)
+
+    impact_scores = {}
+
+    for k, v in scores.items():
+        impact_scores[k] = (
+            v["value"] *
+            v["weight"] *
+            v["confidence"] *
+            scale *
+            stage_factor *
+            sentience_factor
+        )
+
+    return impact_scores
+
 def compute_confidence(scores, mismatch_flag, image_uploaded, num_images=0):
 
     # 1. Base confidence
@@ -304,9 +353,14 @@ def compute_confidence(scores, mismatch_flag, image_uploaded, num_images=0):
     # 2. Mismatch penalty
     mismatch_penalty = 0.15 if mismatch_flag else 0
 
-    # 3. Extreme input penalty
+    # 3. Extreme + deviation penalty (IMPROVED)
     extreme_count = sum(1 for v in scores.values() if v["value"] in [1,5])
-    extreme_penalty = 0.05 * extreme_count
+
+    # Penalise extreme values more strongly
+    extreme_penalty = 0.06 * extreme_count
+
+    # Additional penalty for high deviation from mid-range (uncertainty proxy)
+    deviation_penalty = sum(abs(v["value"] - 3) for v in scores.values()) * 0.01
 
     # 4. Image bonus (scaled)
     if num_images >= 3:
@@ -316,7 +370,7 @@ def compute_confidence(scores, mismatch_flag, image_uploaded, num_images=0):
     else:
         image_bonus = 0
 
-    final_conf = base_conf - mismatch_penalty - extreme_penalty + image_bonus
+    final_conf = base_conf - mismatch_penalty - extreme_penalty - deviation_penalty + image_bonus
 
     return round(max(0, min(1, final_conf)), 2)
 
@@ -333,12 +387,36 @@ def simulate_intervention(scores, system_type, stage, sentience):
     improve_water = st.checkbox("Improve water quality")
     stun_slaughter = st.checkbox("Use electrical stunning")
 
+    # =============================
+    # INTELLIGENT INTERVENTIONS
+    # =============================
+
+    # STOCKING DENSITY
     if reduce_density:
-        sim_scores["Stocking Density"]["value"] = max(1, sim_scores["Stocking Density"]["value"] - 1)
+        current = sim_scores["Stocking Density"]["value"]
 
+        if system_type == "Intensive":
+            reduction = 1.5
+        else:
+            reduction = 1
+
+        if current >= 4:
+            reduction += 0.5
+
+        sim_scores["Stocking Density"]["value"] = max(1, current - reduction)
+
+    # WATER QUALITY
     if improve_water:
-        sim_scores["Water Quality"]["value"] = max(1, sim_scores["Water Quality"]["value"] - 1)
+        current = sim_scores["Water Quality"]["value"]
 
+        reduction = 1
+
+        if current >= 4:
+            reduction += 0.5
+
+        sim_scores["Water Quality"]["value"] = max(1, current - reduction)
+
+    # SLAUGHTER
     if stun_slaughter:
         sim_scores["Slaughter"]["value"] = 2
 
@@ -354,16 +432,10 @@ def simulate_intervention(scores, system_type, stage, sentience):
 # INTERVENTION INTELLIGENCE (V3)
 # =============================
 
-def render_intervention_intelligence(scores, final_risk):
-
-    st.subheader("🧠 Intervention Intelligence")
+def render_intervention_intelligence(scores, final_risk, system_type, geo, top_driver):
 
     # Rank drivers by impact (aligned with model)
-    ranked = sorted(
-        scores.items(),
-        key=lambda x: x[1]["value"] * x[1]["weight"] * x[1]["confidence"],
-        reverse=True
-    )
+    top_driver, ranked = get_top_driver(scores)
 
     top_driver, top_data = ranked[0]
 
@@ -380,7 +452,7 @@ def render_intervention_intelligence(scores, final_risk):
     if top_driver == "Water Quality" and geo == "India":
         st.write("⚠ Constraint: Seasonal water variability may limit intervention effectiveness.")  
     if top_driver == "Slaughter":
-        st.write("Slaughter practices are the primary source of preventable suffering in this system.")
+        pass
     elif top_driver == "Water Quality":
           st.write("Water conditions are the primary source of chronic stress and mortality in this system.")
     elif top_driver == "Stocking Density":
@@ -391,7 +463,10 @@ def render_intervention_intelligence(scores, final_risk):
 
     # Core insight
     st.markdown("**Why this is the priority:**")
-    st.write(f"**{top_driver} is the dominant driver of welfare risk in this system.**")
+    st.write(f"""
+    **{top_driver} is acting as a bottleneck variable** — 
+    improvements here will have a larger impact than changes in other drivers.
+    """)
 
     # Action logic (non-repetitive, synthesised)
     st.markdown("**Recommended focus:**")
@@ -430,8 +505,7 @@ def render_intervention_intelligence(scores, final_risk):
 
 def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
 
-    st.subheader("📢 Advocacy Framing")
-
+    
     # Risk level
     if final_risk >= 6:
         risk_level = "High"
@@ -443,7 +517,10 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     st.write(f"**Risk level:** {risk_level}")
 
     st.markdown("**Why this matters:**")
-    st.write("Large numbers of fish are likely experiencing preventable suffering under current system conditions.")
+    st.write(f"""
+    In **{geo}**, under a **{system_type.lower()} system**, welfare risk is primarily driven by **{top_driver.lower()} conditions**.
+    This indicates a structurally concentrated source of suffering rather than diffuse low-level issues.
+    """)
 
     st.markdown("**Strategic entry point:**")
 
@@ -761,22 +838,38 @@ slaughter = st.slider(
 # FINAL DRIVER VALUES (V3 FIX)
 # =============================
 
-# STOCKING DENSITY
+# =============================
+# FINAL DRIVER VALUES (FIXED LOGIC)
+# =============================
+
+# 1. Start from baseline ONLY
 density_base = sys_data.get("stocking_density_base", 2)
-density = min(5, max(1, density_base + density_delta))
-
-# WATER QUALITY
 water_base = geo_data.get("water_quality_base", 3.5)
-water = min(5, max(1, water_base + water_delta))
-
-# DISEASE
 disease_base = geo_data.get("disease_pressure", 3.2)
-disease = min(5, max(1, disease_base + disease_delta))
 
-# SLAUGHTER stays as is (already defined from slider)
+# 2. Build initial scores using baseline
+scores = build_scores(
+    density_base,
+    water_base,
+    slaughter,
+    disease_base
+)
 
-scores = build_scores(density, water, slaughter, disease)
+# 3. Apply system/geography adjustments (ONLY ONCE)
 scores = apply_baseline(scores, geo, system_type, species)
+
+# 4. NOW apply user deviations (this is the key fix)
+scores["Stocking Density"]["value"] = apply_deviation(
+    scores["Stocking Density"]["value"], density_delta
+)
+
+scores["Water Quality"]["value"] = apply_deviation(
+    scores["Water Quality"]["value"], water_delta
+)
+
+scores["Disease"]["value"] = apply_deviation(
+    scores["Disease"]["value"], disease_delta
+)
 
 # =============================
 # IMAGE INPUT
@@ -811,14 +904,16 @@ if uploaded_files:
         scores, flag = process_image(img_file, scores)
         if flag:
             image_flag = True
-# RISK
+
+# Apply interaction effects BEFORE risk calculation
+scores = apply_interactions(scores)
+
 final_risk, weighted, scale, stage_factor = compute_risk(scores, system_type, stage, sentience)
+
+top_driver, ranked = get_top_driver(scores)
+
 # Identify top driver (MOST IMPORTANT FIX)
-ranked = sorted(
-    scores.items(),
-    key=lambda x: x[1]["value"] * x[1]["weight"] * x[1]["confidence"],
-    reverse=True
-)
+
 # Risk level label
 if final_risk >= 6:
     risk_level = "High"
@@ -827,10 +922,29 @@ elif final_risk >= 3:
 else:
     risk_level = "Low"
 
-top_driver = ranked[0][0]
+top_driver, ranked = get_top_driver(scores)
 
-st.subheader("📊 Welfare Risk")
-st.metric("Welfare Risk Score", final_risk)
+st.markdown("---")
+st.header("📊 Results")
+
+st.markdown("### 📊 Results")
+
+with st.container():
+    st.markdown("#### 🧾 Welfare Snapshot")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Risk Score", final_risk)
+
+    with col2:
+        st.metric("Primary Driver", top_driver)
+
+    with col3:
+        st.metric("Risk Level", risk_level)
+
+    st.warning(f"⚠ {top_driver} is the dominant welfare bottleneck in this system")
+    
 st.success(f"{top_driver} practices are the primary source of preventable suffering in this system.")
 if final_risk >= 6:
     risk_level = "High"
@@ -838,8 +952,6 @@ elif final_risk >= 3:
     risk_level = "Moderate"
 else:
     risk_level = "Low"
-
-st.success(f"{risk_level} welfare risk driven by {top_driver} — high-impact intervention point")
 
 # =============================
 # DRIVER CONTRIBUTION
@@ -853,7 +965,7 @@ with st.expander("📚 Evidence & Sources"):
 
     raw_contributions = {}
     for k, v in scores.items():
-        raw_contributions[k] = v["value"] * v["weight"] * v["confidence"]
+        raw_contributions = compute_driver_impact(scores, system_type, stage, sentience)
 
     total_raw = sum(raw_contributions.values())
 
@@ -878,13 +990,13 @@ with st.expander("📚 Evidence & Sources"):
 
 st.subheader("🧠 Key Insight")
 st.write(f"""
-The system’s welfare risk is primarily driven by **{top_driver}**, 
-which contributes the most to overall harm based on current conditions.
+**{top_driver} is disproportionately driving welfare risk in this system.**
+
+This suggests that **targeting this single factor could unlock outsized welfare gains**, 
+rather than requiring broad system-wide changes.
 """)
 
 def render_summary(top_driver, final_risk):
-
-    st.subheader("🧾 Welfare Diagnosis Summary")
 
     # Risk band
     if final_risk >= 6:
@@ -894,12 +1006,7 @@ def render_summary(top_driver, final_risk):
     else:
         risk_label = "Low"
 
-    st.markdown(f"""
-**Overall welfare risk is {risk_label}, driven by {top_driver}.**
-
-Targeting this issue offers the most effective path to reducing total welfare harm.
-""")
-
+    
     st.markdown("**What to do next:**")
 
     if top_driver == "Slaughter":
@@ -921,9 +1028,9 @@ Targeting this issue offers the most effective path to reducing total welfare ha
 
     # Core message (THIS is what evaluators read)
     st.markdown(f"""
-**Overall welfare risk is {risk_label}, driven by {top_driver}.**
+**Overall welfare risk: {risk_label}**
 
-Targeting this issue offers the most effective path to reducing total welfare harm.
+The system is constrained by **{top_driver}**, making it the most effective intervention point.
 """)
 
     # Strategic clarity
@@ -940,15 +1047,19 @@ Targeting this issue offers the most effective path to reducing total welfare ha
         st.write("Improving biosecurity will reduce long-term system instability and suffering.")
 
 
-# ADVOCACY FIRST (moved up)
-render_advocacy(target_actor, top_driver, final_risk, geo, system_type)
+with st.container():
+    render_advocacy(target_actor, top_driver, final_risk, geo, system_type)
 
-# THEN intelligence layers
-render_intervention_intelligence(scores, final_risk)
-render_policy_intelligence(target_actor, scores, top_driver, geo, system_type)
+with st.container():
+    render_intervention_intelligence(scores, final_risk, system_type, geo, top_driver)
 
-# FINAL summary
-render_summary(top_driver, final_risk)
+with st.container():
+    st.markdown("### 🏛️ Policy Levers")
+    render_policy_intelligence(target_actor, scores, top_driver, geo, system_type)
+
+with st.container():
+    st.markdown("### 🧾 Final Diagnosis")
+    render_summary(top_driver, final_risk)
 
 # =============================
 # FINAL SUMMARY (V3)
@@ -965,11 +1076,21 @@ new_risk, reduce_density, improve_water, stun_slaughter = simulate_intervention(
     scores, system_type, stage, sentience
 )
 
-st.write(f"New Welfare Risk: {new_risk}")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric("Current Risk", final_risk)
+
+with col2:
+    st.metric("Post-Intervention Risk", new_risk)
 
 if final_risk > 0:
     impact = round((final_risk - new_risk) / final_risk * 100, 1)
-    st.write(f"Impact: {impact}% reduction")
+
+    if impact > 0:
+        st.success(f"⬇ {impact}% reduction in welfare risk")
+    else:
+        st.info("No meaningful change — intervention not targeting main driver")
 
 if stun_slaughter and scores["Slaughter"]["value"] >= 4:
     st.caption("Major impact driven by improving slaughter practices")
@@ -1011,7 +1132,7 @@ st.subheader("📉 Confidence")
 st.caption("""
 What affects confidence?
 - Quality of input data (slider assumptions)
-- Availability of evidence
+- How extreme or uncertain the inputs are
 - Scenario realism (species × geography)
 - Presence of supporting images
 """)
@@ -1026,14 +1147,3 @@ else:
 
 if mismatch_flag:
     st.caption("⚠ Reduced confidence due to scenario mismatch")
-
-with st.expander("What affects confidence?"):
-    st.write("""
-Confidence depends on:
-- Data quality of each welfare driver
-- Strength of scientific evidence
-- Scenario realism (species × geography)
-
-Lower confidence does NOT mean low risk  
-→ It means more uncertainty in the estimate
-""")
