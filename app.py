@@ -1,6 +1,9 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 from PIL import Image, ImageStat
 import numpy as np
+import altair as alt
+import pandas as pd
 
 st.set_page_config(layout="wide")
 
@@ -14,7 +17,7 @@ EVIDENCE_DB = {
         "why": "Poor water quality is a primary cause of chronic stress and mortality.",
         "intervention": "Improve filtration, aeration, and water exchange systems.",
         "sources": [("FAO Aquaculture Guidelines", "https://www.fao.org/fishery/en"),
-        ("Boyd (2015) – Water Quality", "https://doi.org/10.1016/j.aquaculture.2015.02.001")]
+        ("Boyd (2015) - Water Quality", "https://doi.org/10.1016/j.aquaculture.2015.02.001")]
     },
     "Stocking Density": {
         "description": "Crowding increases stress and injury.",
@@ -165,12 +168,12 @@ def render_policy_intelligence(target_actor, scores, top_driver, geo, system_typ
         st.markdown("**Non-obvious policy leverage:**")
 
         if geo == "India":
-            st.write("→ Use FSSAI food safety audits to embed welfare compliance instead of creating new laws")
-            st.write("→ Target export certification schemes to introduce stunning requirements first")
-            st.write("→ Pilot in high-production states (e.g. Andhra Pradesh) before national scaling")
+            st.write("-> Use FSSAI food safety audits to embed welfare compliance instead of creating new laws")
+            st.write("-> Target export certification schemes to introduce stunning requirements first")
+            st.write("-> Pilot in high-production states (e.g. Andhra Pradesh) before national scaling")
 
         else:
-            st.write("→ Integrate welfare into existing food safety and hygiene frameworks")
+            st.write("-> Integrate welfare into existing food safety and hygiene frameworks")
 
         st.markdown("**Strategic insight:**")
         st.write("Policy adoption is more likely through existing regulatory systems than new standalone welfare laws")
@@ -183,10 +186,10 @@ def render_policy_intelligence(target_actor, scores, top_driver, geo, system_typ
         st.write("**System failure:** Weak environmental and water management enforcement")
 
         if geo == "India":
-            st.write("→ Integrate water quality into fisheries subsidy conditions")
-            st.write("→ Link compliance to access to government schemes")
+            st.write("-> Integrate water quality into fisheries subsidy conditions")
+            st.write("-> Link compliance to access to government schemes")
         else:
-            st.write("→ Strengthen monitoring and compliance systems")
+            st.write("-> Strengthen monitoring and compliance systems")
 
         st.markdown("**Strategic insight:**")
         st.write("Financial incentives are more effective than enforcement alone")
@@ -198,8 +201,8 @@ def render_policy_intelligence(target_actor, scores, top_driver, geo, system_typ
 
         st.write("**System failure:** No enforceable density standards")
 
-        st.write("→ Introduce density limits through certification systems rather than law")
-        st.write("→ Use buyer-driven compliance mechanisms")
+        st.write("-> Introduce density limits through certification systems rather than law")
+        st.write("-> Use buyer-driven compliance mechanisms")
 
         st.markdown("**Strategic insight:**")
         st.write("Market enforcement is more scalable than regulatory enforcement")
@@ -211,8 +214,8 @@ def render_policy_intelligence(target_actor, scores, top_driver, geo, system_typ
 
         st.write("**System failure:** Weak biosecurity governance")
 
-        st.write("→ Develop cluster-based disease monitoring systems")
-        st.write("→ Integrate into national animal health programs")
+        st.write("-> Develop cluster-based disease monitoring systems")
+        st.write("-> Integrate into national animal health programs")
 
         st.markdown("**Strategic insight:**")
         st.write("Disease control requires coordinated system-level intervention")
@@ -228,7 +231,7 @@ def render_actor_strategy(target_actor, top_driver, final_risk):
         st.write(f"""
 - High-leverage intervention targeting **{top_driver}**
 - Severe but preventable harm
-→ Strong campaign potential
+-> Strong campaign potential
 """)
 
 # =============================
@@ -251,11 +254,11 @@ def detect_mismatch(species, geo, system_type):
 
     issues = []
 
-    # Species × Geography mismatch
+    # Species x Geography mismatch
     if species == "Salmon" and geo in ["India","Bangladesh","Nigeria"]:
         issues.append("Salmon farming is uncommon in this geography")
 
-    # System × Geography mismatch
+    # System x Geography mismatch
     if geo in ["India","Bangladesh"] and system_type == "Intensive":
         issues.append("Highly intensive systems may be less common or poorly regulated in this region")
 
@@ -270,7 +273,7 @@ def compute_sentience(species, confidence):
 
 def apply_deviation(base_value, delta):
     """
-    Converts deviation input into bounded score (1–5)
+    Converts deviation input into bounded score (1-5)
     """
     return min(5, max(1, base_value + delta))
 
@@ -305,11 +308,11 @@ def apply_interactions(scores):
     water = adjusted["Water Quality"]["value"]
     disease = adjusted["Disease"]["value"]
 
-    # 1. Density × Disease interaction
+    # 1. Density x Disease interaction
     if density >= 4 and disease >= 4:
         adjusted["Disease"]["value"] = min(5, disease + 0.5)
 
-    # 2. Water × All (system stress multiplier)
+    # 2. Water x All (system stress multiplier)
     if water >= 4:
         for k in ["Stocking Density", "Disease"]:
             adjusted[k]["value"] = min(5, adjusted[k]["value"] + 0.3)
@@ -433,12 +436,8 @@ def simulate_intervention(scores, system_type, stage, sentience):
 # =============================
 
 def render_intervention_intelligence(scores, final_risk, system_type, geo, top_driver):
-
-    # Rank drivers by impact (aligned with model)
-    top_driver, ranked = get_top_driver(scores)
-
-    top_driver, top_data = ranked[0]
-
+  
+    
     # Risk band
     if final_risk >= 6:
         risk_band = "High"
@@ -459,37 +458,34 @@ def render_intervention_intelligence(scores, final_risk, system_type, geo, top_d
           st.write("Stocking density is the primary driver of stress and welfare degradation in this system.")
     elif top_driver == "Disease":
           st.write("Disease pressure is the primary source of ongoing suffering in this system.")
-    st.write(f"**Risk level:** {risk_band}")
 
     # Core insight
     st.markdown("**Why this is the priority:**")
     st.write(f"""
-    **{top_driver} is acting as a bottleneck variable** — 
-    improvements here will have a larger impact than changes in other drivers.
+    **{top_driver} is the bottleneck** - targeting it yields the highest impact.
     """)
 
-    # Action logic (non-repetitive, synthesised)
     st.markdown("**Recommended focus:**")
-
+    
     if top_driver == "Slaughter":
-        st.write("→ Prioritise humane slaughter (electrical stunning)")
-        st.write("→ Target processors and supply chain actors")
-        st.write("→ High-impact, immediate welfare gains")
+        st.write("-> Prioritise humane slaughter (electrical stunning)")
+        st.write("-> Target processors and supply chain actors")
+        st.write("-> High-impact, immediate welfare gains")
 
     elif top_driver == "Water Quality":
-        st.write("→ Improve water systems (aeration, filtration)")
-        st.write("→ Focus on farmer practices and monitoring")
-        st.write("→ Reduces chronic stress and mortality")
+        st.write("-> Prioritise low-cost aeration and water exchange systems)")
+        st.write("-> Focus on farmer practices and monitoring")
+        st.write("-> Reduces chronic stress and mortality")
 
     elif top_driver == "Stocking Density":
-        st.write("→ Reduce stocking density")
-        st.write("→ Improve spacing and oxygen availability")
-        st.write("→ Incremental but scalable improvements")
+        st.write("-> Reduce stocking density")
+        st.write("-> Improve spacing and oxygen availability")
+        st.write("-> Incremental but scalable improvements")
 
     elif top_driver == "Disease":
-        st.write("→ Strengthen biosecurity and hygiene")
-        st.write("→ Reduce pathogen load and infection spread")
-        st.write("→ Medium-term system stability gains")
+        st.write("-> Strengthen biosecurity and hygiene")
+        st.write("-> Reduce pathogen load and infection spread")
+        st.write("-> Medium-term system stability gains")
 
     # Strategic note (THIS is what makes it feel intelligent)
     st.markdown("**Strategic takeaway:**")
@@ -514,12 +510,11 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     else:
         risk_level = "Low"
 
-    st.write(f"**Risk level:** {risk_level}")
-
+    
     st.markdown("**Why this matters:**")
     st.write(f"""
     In **{geo}**, under a **{system_type.lower()} system**, welfare risk is primarily driven by **{top_driver.lower()} conditions**.
-    This indicates a structurally concentrated source of suffering rather than diffuse low-level issues.
+    This indicates a concentrated source of suffering rather than diffuse issues.
     """)
 
     st.markdown("**Strategic entry point:**")
@@ -530,16 +525,16 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     if top_driver == "Slaughter":
 
         if geo == "India" and system_type == "Extensive":
-            st.write("→ Start with export-oriented processors where compliance incentives already exist")
-            st.write("→ Target aggregators supplying bulk volumes rather than individual farmers")
-            st.write("→ Avoid farmer-level advocacy initially due to decentralised slaughter practices")
+            st.write("-> Start with export-oriented processors where compliance incentives already exist")
+            st.write("-> Target aggregators supplying bulk volumes rather than individual farmers")
+            st.write("-> Avoid farmer-level advocacy initially due to decentralised slaughter practices")
 
         elif system_type == "Intensive":
-            st.write("→ Target large integrated farms and processing units")
-            st.write("→ Leverage corporate procurement standards")
+            st.write("-> Target large integrated farms and processing units")
+            st.write("-> Leverage corporate procurement standards")
 
         else:
-            st.write("→ Focus on processors and supply chain actors controlling slaughter")
+            st.write("-> Focus on processors and supply chain actors controlling slaughter")
 
         st.markdown("**Key constraint:**")
         st.write("Decentralised slaughter reduces enforceability of welfare standards")
@@ -553,10 +548,10 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     elif top_driver == "Water Quality":
 
         if geo == "India":
-            st.write("→ Focus on low-cost interventions (aeration, water exchange)")
-            st.write("→ Frame improvements as productivity gains to drive adoption")
+            st.write("-> Focus on low-cost interventions (aeration, water exchange)")
+            st.write("-> Frame improvements as productivity gains to drive adoption")
         else:
-            st.write("→ Push regulatory compliance and monitoring systems")
+            st.write("-> Push regulatory compliance and monitoring systems")
 
         st.markdown("**Key constraint:**")
         st.write("Farmers operate under cost and infrastructure limitations")
@@ -569,8 +564,8 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     # =============================
     elif top_driver == "Stocking Density":
 
-        st.write("→ Target certification systems and buyer standards")
-        st.write("→ Use market incentives rather than direct regulation")
+        st.write("-> Target certification systems and buyer standards")
+        st.write("-> Use market incentives rather than direct regulation")
 
         st.markdown("**Key constraint:**")
         st.write("Profit incentives favour higher density production")
@@ -583,8 +578,8 @@ def render_advocacy(target_actor, top_driver, final_risk, geo, system_type):
     # =============================
     elif top_driver == "Disease":
 
-        st.write("→ Focus on biosecurity training and farm-level protocols")
-        st.write("→ Target clusters of farms rather than individuals")
+        st.write("-> Focus on biosecurity training and farm-level protocols")
+        st.write("-> Target clusters of farms rather than individuals")
 
         st.markdown("**Key constraint:**")
         st.write("Weak veterinary infrastructure and monitoring")
@@ -657,20 +652,21 @@ This tool combines three types of inputs:
 
 **2. Structured Welfare Model**
 - Four core drivers: Density, Water, Slaughter, Disease
-- Each scored (1–5), weighted, and combined
+- Each scored (1-5), weighted, and combined
 - Adjusted for system type and geography
 
 **3. Empirical Inputs (User + Context)**
 - User-provided scores
 - Optional farm images (visual indicators of water quality and disease risk)
-- Scenario validation (species × geography)
+- Scenario validation (species x geography)
 
 This is a **decision-support model**, not a predictive AI system.
 It is designed for:
-→ Transparency  
-→ Explainability  
-→ Policy and advocacy use
+-> Transparency  
+-> Explainability  
+-> Policy and advocacy use
 """)
+
 st.markdown("**Key references:**")
 st.markdown("- [FAO Aquaculture](https://www.fao.org/fishery/en)")
 st.markdown("- [EFSA Fish Welfare](https://www.efsa.europa.eu/)")
@@ -686,7 +682,7 @@ This tool estimates **fish welfare risk** using four key drivers:
 - Disease Risk  
 
 Each driver is:
-- Scored (1–5)
+- Scored (1-5)
 - Weighted based on welfare importance
 - Adjusted for system type and geography
 
@@ -696,8 +692,8 @@ The model also includes:
 - A **stage factor** (mature systems amplify impact)
 
 The goal is to:
-→ Identify the **highest-impact welfare problem**  
-→ Recommend **targeted interventions**
+-> Identify the **highest-impact welfare problem**  
+-> Recommend **targeted interventions**
 """)
 
 st.subheader("📍 Context")
@@ -761,26 +757,24 @@ sentience = compute_sentience(species, confidence)
 
 st.subheader("🧠 Sentience")
 
-st.write(f"Effective sentience: {round(sentience,2)}")
-
 with st.expander("What does this mean?"):
     st.write("""
 Sentience reflects an animal's capacity to feel pain and suffering.
 
 Approximate comparison:
-- Shrimp: ~0.3  
-- Carp: ~0.5  
-- Tilapia: ~0.6  
-- Salmon: ~0.85  
+- Shrimp: ~0.3
+- Carp: ~0.5
+- Tilapia: ~0.6
+- Salmon: ~0.85
 - Mammals (e.g. pigs, cows): ~0.9+
 
 This tool adjusts welfare risk based on sentience:
-→ Higher sentience = higher moral weight of suffering
+-> Higher sentience = higher moral weight of suffering
 
 Sentience confidence reflects how certain science is about these estimates:
-- Low → limited or debated evidence  
-- Medium → growing but incomplete evidence  
-- High → strong scientific consensus  
+- Low -> limited or debated evidence
+- Medium -> growing but incomplete evidence
+- High -> strong scientific consensus
 """)
 
 # DRIVERS
@@ -793,10 +787,10 @@ Welfare drivers are the **main factors that determine how much suffering fish ex
 
 This tool focuses on four key drivers:
 
-- **Stocking Density** → How crowded the fish are  
-- **Water Quality** → Oxygen, toxins, and environmental conditions  
-- **Slaughter** → How fish are killed  
-- **Disease** → Infection and health risks  
+- **Stocking Density** -> How crowded the fish are  
+- **Water Quality** -> Oxygen, toxins, and environmental conditions  
+- **Slaughter** -> How fish are killed  
+- **Disease** -> Infection and health risks  
 
 These are the **highest-impact, most evidence-backed factors** affecting fish welfare.
 """)
@@ -804,21 +798,21 @@ These are the **highest-impact, most evidence-backed factors** affecting fish we
 geo_data = BASELINE_DATA["geography"].get(geo, {})
 sys_data = BASELINE_DATA["system_type"].get(system_type, {})
 
-st.caption("Low (more space) ← → High (crowding)")
+st.caption("Low (more space) ← -> High (crowding)")
 density_delta = st.slider(
     "Stocking Density (deviation from expected)",
     -2, 2, 0,
     help=TOOLTIPS["Stocking Density"]
 )
 
-st.caption("Good quality ← → Poor quality")
+st.caption("Good quality ← -> Poor quality")
 water_delta = st.slider(
     "Water Quality (deviation from expected)",
     -2, 2, 0,
     help=TOOLTIPS["Water Quality"]
 )
 
-st.caption("Low infection risk ← → High infection risk")
+st.caption("Low infection risk ← -> High infection risk")
 disease_delta = st.slider(
     "Disease Risk (deviation from expected)",
     -2, 2, 0,
@@ -826,7 +820,7 @@ disease_delta = st.slider(
 )
 
 st.caption("⚠ Slaughter is an event (not a continuous condition), so this is an absolute score")
-st.caption("Humane (stunned) ← → Severe (asphyxiation)")
+st.caption("Humane (stunned) ← -> Severe (asphyxiation)")
 
 slaughter = st.slider(
     "Slaughter Method Severity (absolute)",
@@ -878,7 +872,7 @@ scores["Disease"]["value"] = apply_deviation(
 st.subheader("📷 Evidence Input (Optional)")
 
 st.info("""
-Upload 2–5 images of the farm for better assessment.
+Upload 2-5 images of the farm for better assessment.
 
 **What to capture:**
 - Above-water views (pond surface, crowding)
@@ -925,34 +919,92 @@ else:
 top_driver, ranked = get_top_driver(scores)
 
 st.markdown("---")
-st.header("📊 Results")
 
-st.markdown("### 📊 Results")
+
+if final_risk >= 6:
+    verdict = "🚨 CRITICAL WELFARE FAILURE"
+elif final_risk >= 3:
+    verdict = "⚠ STRUCTURAL WELFARE RISK"
+else:
+    verdict = "✅ RELATIVELY STABLE SYSTEM"
+
+st.markdown(
+    f"""
+    <div style="
+        padding:10px;
+        border-radius:6px;
+        background-color:#111;
+        color:#fff;
+        font-size:16px;
+        font-weight:600;
+    ">
+    {verdict}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    f"<div style='font-size:12px; color:gray'>Primary constraint -> <b>{top_driver}</b></div>",
+    unsafe_allow_html=True
+)
+
+st.markdown("---")
+
+st.markdown("### 🧾 Welfare Snapshot")
+st.markdown("---")
 
 with st.container():
-    st.markdown("#### 🧾 Welfare Snapshot")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Risk Score", final_risk)
+        st.metric("Welfare Risk Index", final_risk)
 
     with col2:
-        st.metric("Primary Driver", top_driver)
+        st.metric("Binding Constraint", top_driver)
 
     with col3:
-        st.metric("Risk Level", risk_level)
+        if risk_level == "High":
+            color = "#ff4d4d"
+        elif risk_level == "Moderate":
+            color = "#ffb84d"
+        else:
+            color = "#4CAF50"
 
-    st.warning(f"⚠ {top_driver} is the dominant welfare bottleneck in this system")
+        st.markdown(
+            f"""
+            <div style="
+                padding:8px;
+                border-radius:6px;
+                background-color:{color};
+                color:#000;
+                font-weight:600;
+                text-align:center;
+            ">
+            {risk_level}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown(
+        f"""
+        <div style="
+            padding:8px;
+            border-radius:6px;
+            background-color:{color};
+            color:#000;
+            font-weight:600;
+            text-align:center;
+        ">
+        {risk_level}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
     
-st.success(f"{top_driver} practices are the primary source of preventable suffering in this system.")
-if final_risk >= 6:
-    risk_level = "High"
-elif final_risk >= 3:
-    risk_level = "Moderate"
-else:
-    risk_level = "Low"
-
 # =============================
 # DRIVER CONTRIBUTION
 # =============================
@@ -963,37 +1015,82 @@ else:
 
 with st.expander("📚 Evidence & Sources"):
 
-    raw_contributions = {}
-    for k, v in scores.items():
-        raw_contributions = compute_driver_impact(scores, system_type, stage, sentience)
+    # =============================
+    # DRIVER CONTRIBUTION CHART
+    # =============================
+
+    raw_contributions = compute_driver_impact(scores, system_type, stage, sentience)
 
     total_raw = sum(raw_contributions.values())
 
+    chart_data = []
+    for k, v in raw_contributions.items():
+        pct = (v / total_raw) * 100 if total_raw else 0
+        chart_data.append({
+            "Driver": k,
+            "Contribution": round(pct, 1)
+        })
+
+    st.markdown("### 📊 Contribution Breakdown")
+    top_driver_pct = max(chart_data, key=lambda x: x["Contribution"])
+
+    st.info(f"""
+    **Key insight:** {top_driver_pct['Driver']} contributes ~{top_driver_pct['Contribution']}% of total welfare risk.
+    """)
+
+    import pandas as pd
+
+    df = pd.DataFrame(chart_data)
+
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X("Contribution:Q", title="Contribution (%)"),
+        y=alt.Y("Driver:N", sort='-x'),
+        tooltip=["Driver:N", "Contribution:Q"]
+    )
+
+    st.altair_chart(chart, use_container_width=True)
     # Driver explanation
+    st.markdown("### 📚 Evidence Base")
+
     for k, v in scores.items():
-        st.write(f"**{k} (Score: {v['value']})**")
         ev = EVIDENCE_DB[k]
 
-        st.write(f"**What it means:** {ev['description']}")
-        st.write(f"**Why it matters:** {ev['why']}")
-        st.write(f"**What helps:** {ev['intervention']}")
+        with st.expander(f"{k} (Score: {v['value']})"):
+            st.write(f"**What it means:** {ev['description']}")
+            st.write(f"**Why it matters:** {ev['why']}")
+            st.write(f"**What helps:** {ev['intervention']}")
 
-        for name, link in ev["sources"]:
-            st.markdown(f"- [{name}]({link})")
+            st.markdown("**Sources**")
+            for name, link in ev["sources"]:
+                st.markdown(f"- [{name}]({link})")
 
     # Contribution section
-    st.markdown("**Driver Contribution (%)**")
+    
+st.markdown("---")
+st.markdown("## 🧠 Diagnosis")
 
-    for k in raw_contributions:
-        pct = (raw_contributions[k] / total_raw) * 100 if total_raw else 0
-        st.write(f"{k}: {round(pct,1)}% (score: {round(raw_contributions[k],2)})")
-
-st.subheader("🧠 Key Insight")
 st.write(f"""
-**{top_driver} is disproportionately driving welfare risk in this system.**
+**Primary constraint identified: {top_driver}**
 
-This suggests that **targeting this single factor could unlock outsized welfare gains**, 
-rather than requiring broad system-wide changes.
+The model indicates that this driver is not just high — it is **structurally dominant** 
+after accounting for:
+- interaction effects  
+- system intensity  
+- sentience scaling  
+
+This indicates a **bottleneck structure** — welfare loss is concentrated in one driver.
+
+👉 Targeting this driver will produce **disproportionately large welfare gains**.
+""")
+
+st.markdown("**Model reasoning:**")
+
+dominance_score = scores[top_driver]["value"] * scores[top_driver]["weight"] * scores[top_driver]["confidence"]
+
+st.write(f"""
+- Driver intensity (score x weight x confidence): **{round(dominance_score,2)}**
+- This exceeds other drivers after interaction adjustments
+- Indicates a **bottleneck structure**, not a balanced risk profile
 """)
 
 def render_summary(top_driver, final_risk):
@@ -1010,21 +1107,21 @@ def render_summary(top_driver, final_risk):
     st.markdown("**What to do next:**")
 
     if top_driver == "Slaughter":
-        st.write("→ Advocate adoption of electrical stunning")
-        st.write("→ Engage processors and supply chain actors")
-        st.write("→ Push for welfare standards and enforcement")
+        st.write("-> Advocate adoption of electrical stunning")
+        st.write("-> Engage processors and supply chain actors")
+        st.write("-> Push for welfare standards and enforcement")
 
     elif top_driver == "Water Quality":
-        st.write("→ Improve aeration and water systems")
-        st.write("→ Introduce monitoring and farmer training")
+        st.write("-> Improve aeration and water systems")
+        st.write("-> Introduce monitoring and farmer training")
 
     elif top_driver == "Stocking Density":
-        st.write("→ Reduce crowding through stocking limits")
-        st.write("→ Improve farm management practices")
+        st.write("-> Reduce crowding through stocking limits")
+        st.write("-> Improve farm management practices")
 
     elif top_driver == "Disease":
-        st.write("→ Strengthen biosecurity and hygiene")
-        st.write("→ Reduce infection pressure at system level")
+        st.write("-> Strengthen biosecurity and hygiene")
+        st.write("-> Reduce infection pressure at system level")
 
     # Core message (THIS is what evaluators read)
     st.markdown(f"""
@@ -1033,18 +1130,24 @@ def render_summary(top_driver, final_risk):
 The system is constrained by **{top_driver}**, making it the most effective intervention point.
 """)
 
-    # Strategic clarity
-    if top_driver == "Slaughter":
-        st.write("Improving slaughter practices offers the fastest and most scalable welfare gains.")
+st.markdown("---")
+st.markdown("## 🎯 Strategy")
 
-    elif top_driver == "Water Quality":
-        st.write("Improving environmental conditions will reduce chronic stress and mortality.")
+# Strategic clarity
+if top_driver == "Slaughter":
+    st.write("""
+Improving slaughter practices offers the **highest-leverage intervention**, 
+with immediate and system-wide welfare impact.
+""")
 
-    elif top_driver == "Stocking Density":
-        st.write("Reducing crowding can improve welfare incrementally across the system.")
+elif top_driver == "Water Quality":
+    st.write("Improving environmental conditions will reduce chronic stress and mortality.")
 
-    elif top_driver == "Disease":
-        st.write("Improving biosecurity will reduce long-term system instability and suffering.")
+elif top_driver == "Stocking Density":
+    st.write("Reducing crowding can improve welfare incrementally across the system.")
+
+elif top_driver == "Disease":
+    st.write("Improving biosecurity will reduce long-term system instability and suffering.")
 
 
 with st.container():
@@ -1053,13 +1156,11 @@ with st.container():
 with st.container():
     render_intervention_intelligence(scores, final_risk, system_type, geo, top_driver)
 
-with st.container():
-    st.markdown("### 🏛️ Policy Levers")
-    render_policy_intelligence(target_actor, scores, top_driver, geo, system_type)
+st.markdown("---")
+st.markdown("## 🏛️ Policy Levers")
 
 with st.container():
-    st.markdown("### 🧾 Final Diagnosis")
-    render_summary(top_driver, final_risk)
+    render_policy_intelligence(target_actor, scores, top_driver, geo, system_type)
 
 # =============================
 # FINAL SUMMARY (V3)
@@ -1069,6 +1170,7 @@ with st.container():
 # INTERVENTION SIMULATOR
 # =============================
 
+st.markdown("---")
 st.subheader("🔁 Intervention Simulation")
 st.caption("Select an intervention to see how welfare risk changes")
 
@@ -1090,7 +1192,7 @@ if final_risk > 0:
     if impact > 0:
         st.success(f"⬇ {impact}% reduction in welfare risk")
     else:
-        st.info("No meaningful change — intervention not targeting main driver")
+        st.info(f"No meaningful change — intervention not targeting binding constraint ({top_driver})")
 
 if stun_slaughter and scores["Slaughter"]["value"] >= 4:
     st.caption("Major impact driven by improving slaughter practices")
@@ -1106,13 +1208,14 @@ st.subheader("🔬 Calculation")
 st.write(f"""
 Risk is calculated as:
 
-→ Base welfare pressure: {round(weighted,2)}  
-→ System intensity multiplier: {scale}  
-→ Industry stage multiplier: {stage_factor}  
-→ Sentience adjustment applied  
+-> Base welfare pressure: {round(weighted,2)}  
+-> System intensity multiplier: {scale}  
+-> Industry stage multiplier: {stage_factor}  
+-> Sentience adjustment applied  
 
 Final risk score: {final_risk}
 """)
+st.caption("Model includes interaction effects, system scaling, and sentience weighting.")
 
 # CONFIDENCE
 # =============================
@@ -1133,7 +1236,7 @@ st.caption("""
 What affects confidence?
 - Quality of input data (slider assumptions)
 - How extreme or uncertain the inputs are
-- Scenario realism (species × geography)
+- Scenario realism (species x geography)
 - Presence of supporting images
 """)
 
