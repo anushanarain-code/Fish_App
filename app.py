@@ -1317,27 +1317,17 @@ st.download_button(
     mime="text/plain"
 )
 # =============================
-# FOOTER / CREDIT
+# CREDIT
 # =============================
 
 st.markdown("---")
 
 st.markdown("""
-<div style='text-align: center; padding-top: 10px; padding-bottom: 20px;'>
+<div style='padding-top: 5px; padding-bottom: 10px; line-height: 1.6;'>
 
-<h4 style='margin-bottom: 6px;'>
-🐟 Fish Welfare Decision System
-</h4>
-
-<p style='font-size:15px; color: #B0B0B0; margin-bottom: 4px;'>
-Developed by <b>Anusha Narain</b>
-</p>
-
-<p style='font-size:14px; color: #9AA0A6; margin-bottom: 4px;'>
-Sentient Futures Fellowship
-</p>
-
-<p style='font-size:14px; color: #9AA0A6;'>
+<p style='font-size:14px; color: #A0A0A0;'>
+Developed by <b>Anusha Narain</b><br>
+Sentient Futures Fellowship<br>
 Mentored by <b>James Morgan</b>
 </p>
 
