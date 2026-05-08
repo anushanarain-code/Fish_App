@@ -1311,14 +1311,13 @@ This report was generated using a structured welfare model integrating:
 - Contextual inputs
 
 """
-st.markdown("---")
-st.caption(
-    "Developed by Anusha Narain | Sentient Futures Fellowship | Mentored by James Morgan"
-)
-
 st.download_button(
     label="⬇ Download Report",
     data=report,
     file_name="fish_welfare_report.txt",
     mime="text/plain"
+)
+st.markdown("---")
+st.caption(
+    "Developed by Anusha Narain | Sentient Futures Fellowship | Mentored by James Morgan"
 )
