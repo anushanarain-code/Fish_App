@@ -1317,19 +1317,13 @@ st.download_button(
     mime="text/plain"
 )
 # =============================
-# CREDIT
+# CREDIT (single line)
 # =============================
 
 st.markdown("---")
 
 st.markdown("""
-<div style='padding-top: 5px; padding-bottom: 10px; line-height: 1.6;'>
-
-<p style='font-size:14px; color: #A0A0A0;'>
-Developed by <b>Anusha Narain</b><br>
-Sentient Futures Fellowship<br>
-Mentored by <b>James Morgan</b>
+<p style='font-size:14px; color:#A0A0A0; text-align:left;'>
+Developed by <b>Anusha Narain</b> | Sentient Futures Fellowship | Mentored by <b>James Morgan</b>
 </p>
-
-</div>
 """, unsafe_allow_html=True)
