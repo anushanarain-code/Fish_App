@@ -1316,6 +1316,30 @@ st.download_button(
     file_name="fish_welfare_report.txt",
     mime="text/plain"
 )
-st.caption(
-    "Developed by Anusha Narain | Sentient Futures Fellowship | Mentored by James Morgan"
-)
+# =============================
+# FOOTER / CREDIT
+# =============================
+
+st.markdown("---")
+
+st.markdown("""
+<div style='text-align: center; padding-top: 10px; padding-bottom: 20px;'>
+
+<h4 style='margin-bottom: 6px;'>
+🐟 Fish Welfare Decision System
+</h4>
+
+<p style='font-size:15px; color: #B0B0B0; margin-bottom: 4px;'>
+Developed by <b>Anusha Narain</b>
+</p>
+
+<p style='font-size:14px; color: #9AA0A6; margin-bottom: 4px;'>
+Sentient Futures Fellowship
+</p>
+
+<p style='font-size:14px; color: #9AA0A6;'>
+Mentored by <b>James Morgan</b>
+</p>
+
+</div>
+""", unsafe_allow_html=True)
