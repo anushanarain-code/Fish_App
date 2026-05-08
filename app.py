@@ -1255,7 +1255,6 @@ if mismatch_flag:
 # DOWNLOAD REPORT
 # =============================
 
-st.markdown("---")
 st.subheader("📄 Export Report")
 
 report = f"""
@@ -1317,7 +1316,6 @@ st.download_button(
     file_name="fish_welfare_report.txt",
     mime="text/plain"
 )
-st.markdown("---")
 st.caption(
     "Developed by Anusha Narain | Sentient Futures Fellowship | Mentored by James Morgan"
 )
